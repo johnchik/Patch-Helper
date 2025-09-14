@@ -44,8 +44,20 @@ jobs:
     - name: Download ReVanced CLI
       run: |
         VERSION="${{ steps.cli_version.outputs.version }}"
-        curl -L -o revanced-cli.jar "https://github.com/ReVanced/revanced-cli/releases/download/$VERSION/revanced-cli-$VERSION-all.jar"
+        # Remove 'v' prefix from version for filename
+        VERSION_NO_V=${VERSION#v}
+        echo "Downloading ReVanced CLI version: $VERSION (filename version: $VERSION_NO_V)"
+        curl -L -o revanced-cli.jar "https://github.com/ReVanced/revanced-cli/releases/download/$VERSION/revanced-cli-$VERSION_NO_V-all.jar"
+        
+        # Verify download
+        if [ ! -f revanced-cli.jar ] || [ ! -s revanced-cli.jar ]; then
+          echo "Error: Failed to download ReVanced CLI"
+          exit 1
+        fi
+        
+        echo "✅ ReVanced CLI downloaded successfully"
         ls -la revanced-cli.jar
+        file revanced-cli.jar
     
     - name: Get latest ReVanced patches version
       id: patches_version
@@ -61,7 +73,18 @@ jobs:
     - name: Download ReVanced patches
       run: |
         VERSION="${{ steps.patches_version.outputs.version }}"
-        curl -L -o patches.rvp "https://github.com/ReVanced/revanced-patches/releases/download/$VERSION/patches-$VERSION.rvp"
+        # Remove 'v' prefix from version for filename
+        VERSION_NO_V=${VERSION#v}
+        echo "Downloading ReVanced patches version: $VERSION (filename version: $VERSION_NO_V)"
+        curl -L -o patches.rvp "https://github.com/ReVanced/revanced-patches/releases/download/$VERSION/patches-$VERSION_NO_V.rvp"
+        
+        # Verify download
+        if [ ! -f patches.rvp ] || [ ! -s patches.rvp ]; then
+          echo "Error: Failed to download ReVanced patches"
+          exit 1
+        fi
+        
+        echo "✅ ReVanced patches downloaded successfully"
         ls -la patches.rvp
     
     - name: Download Google Photos APK
