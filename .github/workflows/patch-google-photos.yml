@@ -90,7 +90,55 @@ jobs:
     - name: Download Google Photos APK
       run: |
         echo "Downloading APK from: ${{ inputs.apk_url }}"
-        curl -L -o google-photos.apk "${{ inputs.apk_url }}"
+        
+        # Download with browser-like headers to bypass anti-bot protection
+        curl -L \
+             -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" \
+             -H "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8" \
+             -H "Accept-Language: en-US,en;q=0.5" \
+             -H "Accept-Encoding: gzip, deflate" \
+             -H "Connection: keep-alive" \
+             -H "Upgrade-Insecure-Requests: 1" \
+             --compressed \
+             -o google-photos.apk \
+             "${{ inputs.apk_url }}"
+        
+        # Verify it's actually an APK file, not HTML
+        if file google-photos.apk | grep -q "HTML\|text"; then
+          echo "⚠️  First attempt got HTML, trying with wget..."
+          
+          # Try with wget as fallback
+          wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" \
+               --header="Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8" \
+               --header="Accept-Language: en-US,en;q=0.5" \
+               --no-check-certificate \
+               -O google-photos.apk \
+               "${{ inputs.apk_url }}"
+          
+          # Check again
+          if file google-photos.apk | grep -q "HTML\|text"; then
+            echo "❌ Error: Both curl and wget got HTML instead of APK"
+            echo "This means APK Mirror is blocking automated downloads."
+            echo ""
+            echo "Workaround options:"
+            echo "1. Try a different APK source"
+            echo "2. Download the APK manually and upload it to your repo"
+            echo "3. Use a different APK hosting service"
+            echo ""
+            echo "File content preview:"
+            head -5 google-photos.apk
+            exit 1
+          fi
+        fi
+        
+        # Verify it's a valid APK
+        if ! file google-photos.apk | grep -q "Android package"; then
+          echo "❌ Error: Downloaded file is not a valid APK"
+          file google-photos.apk
+          exit 1
+        fi
+        
+        echo "✅ Google Photos APK downloaded successfully"
         ls -la google-photos.apk
         file google-photos.apk
     
