@@ -152,10 +152,15 @@ jobs:
     - name: Upload patched APK
       uses: actions/upload-artifact@v4
       with:
-        name: google-photos-revanced-${{ github.run_number }}
-        path: |
-          google-photos-patched.apk
-          google-photos-patched.keystore
+        name: google-photos-revanced-${{ github.run_number }}.apk
+        path: google-photos-patched.apk
+        retention-days: 30
+    
+    - name: Upload keystore (optional)
+      uses: actions/upload-artifact@v4
+      with:
+        name: keystore-${{ github.run_number }}
+        path: google-photos-patched.keystore
         retention-days: 30
     
     - name: Show completion summary
