@@ -61,12 +61,12 @@ check_dependencies() {
 # Check GitHub authentication
 check_auth() {
     print_info "Checking GitHub authentication..."
-    if ! gh auth status &> /dev/null; then
-        print_error "Not authenticated with GitHub CLI"
-        print_info "Run: gh auth login"
+    if ! gh auth status --hostname github.com &> /dev/null; then
+        print_error "Not authenticated with GitHub CLI for github.com"
+        print_info "Run: gh auth login --hostname github.com"
         exit 1
     fi
-    print_success "GitHub authentication verified"
+    print_success "GitHub authentication verified for github.com"
 }
 
 # Get APK URL from user
@@ -90,7 +90,7 @@ get_apk_url() {
 trigger_workflow() {
     print_info "Triggering GitHub Actions workflow..."
     
-    gh workflow run "$WORKFLOW_FILE" \
+    GH_HOST=github.com gh workflow run "$WORKFLOW_FILE" \
         --repo "$REPO" \
         --field apk_url="$APK_URL"
     
@@ -102,7 +102,7 @@ trigger_workflow() {
 get_latest_run_id() {
     print_info "Getting latest workflow run ID..."
     
-    RUN_ID=$(gh run list \
+    RUN_ID=$(GH_HOST=github.com gh run list \
         --repo "$REPO" \
         --workflow="$WORKFLOW_FILE" \
         --limit=1 \
@@ -125,8 +125,8 @@ wait_for_completion() {
     local elapsed=0
     
     while [ $elapsed -lt $MAX_WAIT_TIME ]; do
-        STATUS=$(gh run view "$RUN_ID" --repo "$REPO" --json status --jq '.status')
-        CONCLUSION=$(gh run view "$RUN_ID" --repo "$REPO" --json conclusion --jq '.conclusion')
+        STATUS=$(GH_HOST=github.com gh run view "$RUN_ID" --repo "$REPO" --json status --jq '.status')
+        CONCLUSION=$(GH_HOST=github.com gh run view "$RUN_ID" --repo "$REPO" --json conclusion --jq '.conclusion')
         
         case "$STATUS" in
             "completed")
@@ -165,7 +165,7 @@ download_artifacts() {
     cd "$TEMP_DIR"
     
     # Download artifacts
-    if ! gh run download "$RUN_ID" --repo "$REPO"; then
+    if ! GH_HOST=github.com gh run download "$RUN_ID" --repo "$REPO"; then
         print_error "Failed to download artifacts"
         exit 1
     fi
@@ -213,6 +213,19 @@ check_adb_devices() {
     fi
 }
 
+# Uninstall existing ReVanced Google Photos
+uninstall_existing() {
+    print_info "Attempting to uninstall existing ReVanced Google Photos..."
+    print_info "This will fail silently if the app is not installed, which is fine."
+    
+    # Try to uninstall ReVanced Google Photos (will fail silently if not installed)
+    if "$ADB_PATH" uninstall app.revanced.android.photos 2>/dev/null; then
+        print_success "Successfully uninstalled existing ReVanced Google Photos"
+    else
+        print_info "No existing ReVanced Google Photos found (or uninstall failed)"
+    fi
+}
+
 # Install APK
 install_apk() {
     print_info "Installing patched Google Photos APK..."
@@ -222,9 +235,21 @@ install_apk() {
         print_info "You can now launch Google Photos on your device"
     else
         print_error "Failed to install APK"
-        print_info "You may need to uninstall the existing Google Photos app first:"
-        print_info "adb uninstall com.google.android.apps.photos"
-        exit 1
+        print_info "Trying to install as system app replacement..."
+        
+        # Try installing with replace flag
+        if "$ADB_PATH" install -r --user 0 "$PATCHED_APK"; then
+            print_success "APK installed successfully with replace flag!"
+            print_info "You can now launch Google Photos on your device"
+        else
+            print_error "Installation failed even with replace flag"
+            print_info "Manual steps you can try:"
+            print_info "1. adb uninstall com.google.android.apps.photos"
+            print_info "2. adb uninstall app.revanced.android.photos"
+            print_info "3. Manually uninstall Google Photos from device settings"
+            print_info "4. Enable 'Install unknown apps' in device settings"
+            exit 1
+        fi
     fi
 }
 
@@ -250,6 +275,7 @@ main() {
     wait_for_completion
     download_artifacts
     check_adb_devices
+    uninstall_existing
     install_apk
     
     echo
