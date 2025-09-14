@@ -1,0 +1,95 @@
+name: Patch Google Photos with ReVanced
+
+on:
+  workflow_dispatch:
+    inputs:
+      apk_url:
+        description: 'Google Photos APK download URL from APK Mirror'
+        required: true
+        type: string
+      cli_version:
+        description: 'ReVanced CLI version (leave empty for latest)'
+        required: false
+        type: string
+      patches_version:
+        description: 'ReVanced patches version (leave empty for latest)'
+        required: false
+        type: string
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+    
+    - name: Get latest ReVanced CLI version
+      id: cli_version
+      run: |
+        if [ -n "${{ inputs.cli_version }}" ]; then
+          echo "version=${{ inputs.cli_version }}" >> $GITHUB_OUTPUT
+        else
+          VERSION=$(curl -s https://api.github.com/repos/ReVanced/revanced-cli/releases/latest | jq -r '.tag_name')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+        fi
+        echo "Using ReVanced CLI version: $VERSION"
+    
+    - name: Download ReVanced CLI
+      run: |
+        VERSION="${{ steps.cli_version.outputs.version }}"
+        curl -L -o revanced-cli.jar "https://github.com/ReVanced/revanced-cli/releases/download/$VERSION/revanced-cli-$VERSION-all.jar"
+        ls -la revanced-cli.jar
+    
+    - name: Get latest ReVanced patches version
+      id: patches_version
+      run: |
+        if [ -n "${{ inputs.patches_version }}" ]; then
+          echo "version=${{ inputs.patches_version }}" >> $GITHUB_OUTPUT
+        else
+          VERSION=$(curl -s https://api.github.com/repos/ReVanced/revanced-patches/releases/latest | jq -r '.tag_name')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+        fi
+        echo "Using ReVanced patches version: $VERSION"
+    
+    - name: Download ReVanced patches
+      run: |
+        VERSION="${{ steps.patches_version.outputs.version }}"
+        curl -L -o patches.rvp "https://github.com/ReVanced/revanced-patches/releases/download/$VERSION/patches-$VERSION.rvp"
+        ls -la patches.rvp
+    
+    - name: Download Google Photos APK
+      run: |
+        echo "Downloading APK from: ${{ inputs.apk_url }}"
+        curl -L -o google-photos.apk "${{ inputs.apk_url }}"
+        ls -la google-photos.apk
+        file google-photos.apk
+    
+    - name: Patch Google Photos APK
+      run: |
+        echo "Starting patching process..."
+        java -jar revanced-cli.jar patch -p patches.rvp -o google-photos-patched.apk google-photos.apk
+        echo "Patching completed!"
+        ls -la google-photos-patched.*
+    
+    - name: Upload patched APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: google-photos-revanced-${{ github.run_number }}
+        path: |
+          google-photos-patched.apk
+          google-photos-patched.keystore
+        retention-days: 30
+    
+    - name: Show completion summary
+      run: |
+        echo "✅ Patching completed successfully!"
+        echo "📱 APK Size: $(du -h google-photos-patched.apk | cut -f1)"
+        echo "🔗 Download the patched APK from the 'Artifacts' section of this workflow run"
+        echo "🔑 The keystore file is also included for future use"
